@@ -119,9 +119,12 @@ if __name__ == '__main__':
     retrieve = Retrieve(config.index, config.term_weighting)
     all_results = Result_Store()
 
-    #for (qid, query) in queries:
-    results = retrieve.for_query()#query)
-    #all_results.store(qid, results)
+    index = 0
+    for (qid, query) in queries:
+        results = retrieve.for_query(query)
+        print("processing: ", index)
+        all_results.store(qid, results)
+        index +=1
 
     all_results.output(config.outfile)
 
