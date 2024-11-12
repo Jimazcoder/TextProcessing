@@ -53,17 +53,21 @@ class Retrieve:
             self.inverted_tf.update({term : dict(self.index).get(term)})
 
         return self.tf
-
     
     #tf_idf = tf * idf
     #idf = log(no. docs / 1 + no. docs containing t)
-    def form_inverted_tf_idf_matrix(self, query):
+    def form_inverted_tf_idf_matrix(self):
         self.tf_idf = {}
         N = len(self.filtered_docs)
-        for doc, term_tf in dict(self.tf):           #{doc1: {term1: tf, term2: tf...}...}
-            inverted_tf = self.inverted_tf
-            term_tfidf = {term : tf*(np.log(N/1+len(inverted_tf.get(term)))) for term, tf in term_tf } #multiply all tf by idf for each doc in list comprehension
-            self.tf_idf.update({doc: term_tfidf})
+        for doc, term_tf in dict(self.tf).items():    #{doc1: {term1: tf, term2: tf...}...}
+            term_tfidf = {}
+            for term, tf in dict(term_tf).items():
+                if term in self.inverted_tf:
+                    DFt = len(self.inverted_tf)
+                else:
+                    DFt = 0
+                term_tfidf.update({term : tf*np.log10(N/1 + DFt)})
+            self.tf_idf.update({doc : term_tfidf})
         return self.tf_idf
     
     def calculateCosSimilarity(self):
@@ -80,7 +84,8 @@ class Retrieve:
         self.form_query_vector(query)
         self.compute_tf_unique_doc_count()
         self.form_filtered_tf_matrix(query)
-        print(self.inverted_tf)
+        self.form_inverted_tf_idf_matrix()
+        print(self.tf_idf)
         return list(range(1,11))
 
 
