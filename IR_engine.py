@@ -119,14 +119,14 @@ if __name__ == '__main__':
     retrieve = Retrieve(config.index, config.term_weighting)
     all_results = Result_Store()
 
-    for (qid, query) in queries:
-        results = retrieve.for_query(query)
-        all_results.store(qid, results)
+    #for (qid, query) in queries:
+    results = retrieve.for_query()#query)
+    #all_results.store(qid, results)
 
     all_results.output(config.outfile)
 
 #=======================================================
-#self.index contains a list of all terms in each document {term : {documentID: count, documentID: count ...}
+#self.index contains a list of all terms in each document {term : {documentID: count, documentID: count} ...}
 #self.queries contains a list of all the terms in each query [(queryId, 'term1', 'term2', ...), ...]
 #can do a heavy filter by removing all documents that don't contain term
 #1. for each term in query 
