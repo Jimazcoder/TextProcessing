@@ -72,9 +72,32 @@ class Retrieve:
     
     def calculateCosSimilarity(self):
         self.similarityMatrix = {}
+
         if self.term_weighting == 'tfidf':
-            for doc, term_tfidf in self.tf_idf:    # -> {doc: {term: tfidf, ...} ...} 
-                return                          
+            for doc, term_tfidf in dict(self.tf_idf).items():    # -> {doc: {term: tfidf, ...} ...} 
+                numerator = 0
+                query_denom = 0
+                doc_denom = 0
+                for term in self.query_vector:
+                    numerator += (dict(term_tfidf).get(term) * self.query_vector.get(term))
+                    query_denom += np.square(self.query_vector.get(term))
+                    doc_denom += np.square(dict(term_tfidf).get(term))
+                result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
+                self.similarityMatrix.update({doc : result})
+            return self.similarityMatrix
+        
+        elif self.term_weighting == 'tf':
+            for doc, term_tf in dict(self.tf).items():    # -> {doc: {term: tfidf, ...} ...} 
+                numerator = 0
+                query_denom = 0
+                doc_denom = 0
+                for term in self.query_vector:
+                    numerator += (dict(term_tf).get(term) * self.query_vector.get(term))
+                    query_denom += np.square(self.query_vector.get(term))
+                    doc_denom += np.square(dict(term_tf).get(term))
+                result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
+                self.similarityMatrix.update({doc : result})
+            return self.similarityMatrix                           
 
     # Method performing retrieval for a single query (which is 
     # represented as a list of preprocessed terms).​ Returns list 
@@ -85,7 +108,9 @@ class Retrieve:
         self.compute_tf_unique_doc_count()
         self.form_filtered_tf_matrix(query)
         self.form_inverted_tf_idf_matrix()
-        print(self.tf_idf)
-        return list(range(1,11))
+        self.calculateCosSimilarity()
+        results_list = dict(sorted(self.similarityMatrix.items(), key=lambda item: item[1], reverse=True))
+        results_list_doc_ids = results_list.keys()
+        return list(results_list_doc_ids)
 
 
