@@ -6,6 +6,7 @@ class Retrieve:
     def __init__(self,index, term_weighting): 
         self.index = index
         self.term_weighting = term_weighting
+        self.num_docs = self.compute_number_of_documents()
         self.doc_vectors = self.form_doc_vectors()
 
     def form_query_vector(self, query):
@@ -59,6 +60,7 @@ class Retrieve:
                     doc_vectors.update({doc : current_doc})
                 else:    
                     doc_vectors.update({doc : {term : tf}})
+        print(doc_vectors)
         return doc_vectors
     
     def form_tf_matrix(self):
@@ -72,18 +74,31 @@ class Retrieve:
 
         return self.filtered_doc_vectors
     
-    #tf_idf = tf * idf
-    #idf = log(no. docs / 1 + no. docs containing t)
-    def form_inverted_tf_idf_matrix(self):
+    def form_tf_idf_matrix(self):
         self.tf_idf = {}
         N = len(self.filtered_doc_vectors)
         for doc, term_tf in self.tf.items():    #{doc1: {term1: tf, term2: tf...}...}
             term_tfidf = {}
             for term, tf in term_tf.items():
                 DFt = len(self.index.get(term))
-                term_tfidf.update({term : tf*np.log10(N/1 + DFt)})
+                idf = np.log10(N/DFt)
+                term_tfidf.update({term : tf*idf})
             self.tf_idf.update({doc : term_tfidf})
         return self.tf_idf
+    
+    def get_dot_product(self, document):
+        dot = 0
+        for term in self.query_vector:
+            if term in document:
+                dot += document.get(term) * self.query_vector.get(term)
+        return dot
+
+    def get_magnitude(self, vector):
+        magnitude = 0
+        for term in vector:
+            magnitude += vector.get(term)
+        return np.sqrt(magnitude)
+    
     
     def calculateCosSimilarity(self):
         self.similarityMatrix = {}
@@ -95,20 +110,15 @@ class Retrieve:
         elif self.term_weighting == 'binary':
             docs = self.binary
         
-        for doc, frequency in docs.items():    # -> {doc: {term: tfidf, ...} ...} 
-                numerator = 0
-                query_denom = 0
-                doc_denom = 0
-                for term in self.query_vector:
-                    numerator += ((frequency.get(term) or 0) * self.query_vector.get(term))
-                    query_denom += np.square(self.query_vector.get(term))
-                    doc_denom += np.square(frequency.get(term) or 0)
-                result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
-                self.similarityMatrix.update({doc : result})
+        for doc, frequency in docs.items():
+            numerator = self.get_dot_product(frequency)
+            query_magnitude = self.get_magnitude(self.query_vector)
+            document_magnitude = self.get_magnitude(frequency)
+            result = numerator/(query_magnitude * document_magnitude)
+            self.similarityMatrix.update({doc : result})
         return self.similarityMatrix
 
                                
-
     # Method performing retrieval for a single query (which is 
     # represented as a list of preprocessed terms).​ Returns list 
     # of doc ids for relevant docs (in rank order).
@@ -116,8 +126,10 @@ class Retrieve:
         self.form_query_vector(query)
         if self.term_weighting == "binary":
             self.form_binary_matrix()
-        self.tf = self.form_tf_matrix()
-        self.form_inverted_tf_idf_matrix()
+        else:
+            self.tf = self.form_tf_matrix()
+            if self.term_weighting == "tfidf":
+                self.form_tf_idf_matrix()
         self.calculateCosSimilarity()
         results_list = dict(sorted(self.similarityMatrix.items(), key=lambda item: item[1], reverse=True))
         results_list_doc_ids = results_list.keys()
