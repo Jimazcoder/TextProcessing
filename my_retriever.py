@@ -6,7 +6,7 @@ class Retrieve:
     def __init__(self,index, term_weighting): 
         self.index = index
         self.term_weighting = term_weighting
-        self.num_docs = self.compute_number_of_documents()
+        self.doc_vectors = self.form_doc_vectors()
 
     def form_query_vector(self, query):
         self.query_vector = {}
@@ -29,108 +29,94 @@ class Retrieve:
     
     def compute_tf_unique_doc_count(self):
         self.filtered_docs = {}
-        for term, docs in dict(self.index).items():
+        for term, docs in self.index.items():
             if term in self.query_vector:
-                for doc, val in dict(docs).items():
+                for doc, val in docs.items():
                     self.filtered_docs.update({doc : 0})
         return self.filtered_docs
     
     def form_binary_matrix(self):
+        self.filtered_docs = self.compute_tf_unique_doc_count()
         self.binary = {}
         for doc in self.filtered_docs:
             binary = {}
             for term in self.query_vector:
-                row = dict(self.index).get(term)
-                if row is not None and doc in dict(row):
+                row = self.index.get(term)
+                if row is not None and doc in row:
                     binary.update({term : 1})
                 else:
                     binary.update({term : 0})     
             self.binary.update({doc: binary})
 
-    def form_filtered_tf_matrix(self):
-        self.tf = {}
-        for doc in self.filtered_docs:
-            tf = {}
+    def form_doc_vectors(self):
+        doc_vectors = {}
+        for term in self.index:
+            row = self.index.get(term)
+            for doc, tf in row.items():
+                if doc in doc_vectors:
+                    current_doc = doc_vectors.get(doc)
+                    current_doc.update({term : tf})
+                    doc_vectors.update({doc : current_doc})
+                else:    
+                    doc_vectors.update({doc : {term : tf}})
+        return doc_vectors
+    
+    def form_tf_matrix(self):
+        self.filtered_doc_vectors = {}
+        for doc in self.doc_vectors:
+            doc_vector = self.doc_vectors.get(doc)
             for term in self.query_vector:
-                row = dict(self.index).get(term)
-                if row is not None and doc in dict(row):
-                    tf.update({term : dict(row).get(doc)})
-                else:
-                    tf.update({term : 0})     
-            self.tf.update({doc: tf})                                                              # -> {doc1: {term1: tf, term2: tf...}...}                                                           
+                if term in doc_vector:
+                    self.filtered_doc_vectors.update({doc : doc_vector})
+                    break
 
-        self.inverted_tf = {}
-        for term in self.query_vector:
-            self.inverted_tf.update({term : dict(self.index).get(term)})
-
-        return self.tf
+        return self.filtered_doc_vectors
     
     #tf_idf = tf * idf
     #idf = log(no. docs / 1 + no. docs containing t)
     def form_inverted_tf_idf_matrix(self):
         self.tf_idf = {}
-        N = len(self.filtered_docs)
-        for doc, term_tf in dict(self.tf).items():    #{doc1: {term1: tf, term2: tf...}...}
+        N = len(self.filtered_doc_vectors)
+        for doc, term_tf in self.tf.items():    #{doc1: {term1: tf, term2: tf...}...}
             term_tfidf = {}
-            for term, tf in dict(term_tf).items():
-                if term in self.inverted_tf:
-                    DFt = len(self.inverted_tf)
-                else:
-                    DFt = 0
+            for term, tf in term_tf.items():
+                DFt = len(self.index.get(term))
                 term_tfidf.update({term : tf*np.log10(N/1 + DFt)})
             self.tf_idf.update({doc : term_tfidf})
         return self.tf_idf
     
     def calculateCosSimilarity(self):
         self.similarityMatrix = {}
-
+        docs = {}
         if self.term_weighting == 'tfidf':
-            for doc, term_tfidf in dict(self.tf_idf).items():    # -> {doc: {term: tfidf, ...} ...} 
-                numerator = 0
-                query_denom = 0
-                doc_denom = 0
-                for term in self.query_vector:
-                    numerator += (dict(term_tfidf).get(term) * self.query_vector.get(term))
-                    query_denom += np.square(self.query_vector.get(term))
-                    doc_denom += np.square(dict(term_tfidf).get(term))
-                result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
-                self.similarityMatrix.update({doc : result})
-            return self.similarityMatrix
-        
+            docs = self.tf_idf
         elif self.term_weighting == 'tf':
-            for doc, term_tf in dict(self.tf).items():    # -> {doc: {term: tfidf, ...} ...} 
-                numerator = 0
-                query_denom = 0
-                doc_denom = 0
-                for term in self.query_vector:
-                    numerator += (dict(term_tf).get(term) * self.query_vector.get(term))
-                    query_denom += np.square(self.query_vector.get(term))
-                    doc_denom += np.square(dict(term_tf).get(term))
-                result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
-                self.similarityMatrix.update({doc : result})
-            return self.similarityMatrix    
-
+            docs = self.tf
         elif self.term_weighting == 'binary':
-            for doc, term_binary in dict(self.binary).items():    # -> {doc: {term: tfidf, ...} ...} 
+            docs = self.binary
+        
+        for doc, frequency in docs.items():    # -> {doc: {term: tfidf, ...} ...} 
                 numerator = 0
                 query_denom = 0
                 doc_denom = 0
                 for term in self.query_vector:
-                    numerator += (dict(term_binary).get(term) * self.query_vector.get(term))
+                    numerator += ((frequency.get(term) or 0) * self.query_vector.get(term))
                     query_denom += np.square(self.query_vector.get(term))
-                    doc_denom += np.square(dict(term_binary).get(term))
+                    doc_denom += np.square(frequency.get(term) or 0)
                 result = numerator/(np.sqrt(query_denom)*np.sqrt(doc_denom))
                 self.similarityMatrix.update({doc : result})
-            return self.similarityMatrix                        
+        return self.similarityMatrix
+
+                               
 
     # Method performing retrieval for a single query (which is 
     # represented as a list of preprocessed terms).​ Returns list 
     # of doc ids for relevant docs (in rank order).
     def for_query(self, query):
         self.form_query_vector(query)
-        self.compute_tf_unique_doc_count()
-        self.form_binary_matrix()
-        self.form_filtered_tf_matrix()
+        if self.term_weighting == "binary":
+            self.form_binary_matrix()
+        self.tf = self.form_tf_matrix()
         self.form_inverted_tf_idf_matrix()
         self.calculateCosSimilarity()
         results_list = dict(sorted(self.similarityMatrix.items(), key=lambda item: item[1], reverse=True))
